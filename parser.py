@@ -75,12 +75,10 @@ body              := [ \n\t]*, statement, (terminal, statement)*, terminal?, [ \
 statement         := assignment/expression
 assignment        := identifier, ts, '=', expression
 
-
 # Basic expressions and grouping (identifiers are like special expressions for variables)
 identifier        := local_var/global_var, tail?
 expression        := ts, identifier/(expression_group/literal/block, tail?), ts, (operator, ts, expression)?
 expression_group  := "(", ts, expression, ts, ")"
-
 
 # Blocks and their assorted stuff
 block             := "{", ("|", param_list, "|")?, body, "}"
@@ -89,7 +87,7 @@ param_list        := ts, local_var, ts, (",", param_list)?
 operator          := math_op
 <math_op>         := "+"/"-"/"*"/"/"
 
-
+# Literals
 literal           := string/number
 number            := [1-9], [0-9]*, decimal?
 string            := ("\"", -"\""+, "\"")/("'", -"'"+, "'")

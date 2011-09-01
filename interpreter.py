@@ -2,21 +2,104 @@ import pprint
 pp = pprint.PrettyPrinter(indent=1)
 
 
+class MDeclared(object):
+  "Wrapper for functions attached to a type to be executed by the interpreter."
+  def __init__(self, body):
+    self.body = body
+  def native(self):
+    return False
+  def delcared(self):
+    return True
+class MNative(object):
+  "Wrapper for functions defined within the interpreter source code."
+  def __init__(self, name):
+    self.name = name
+  def native(self):
+    return True
+  def declared(self):
+    return False
 
-class TFunc(object):
+class TObject(object):
   def __init__(self):
+    self.type = 'object'
+    self.methods = {'methods': MNative('native_methods')}
+  
+  def native_methods(self):
+    return self.methods.keys()
+  def is_a(self, other):
+    return self.type == other
+  def respond_to(self, method):
+    return self.methods.has_key(method)
+  def call(self, method, parameters = []):
+    method = self.methods[method]
+    if method.native():
+      #self.__dict__[method.name](parameters)
+      return self.__getattribute__(method.name)(parameters)
+    else:
+      raise Exception('Declared methods not implemented yet!')
+
+class TString(TObject):
+  def __init__(self):
+    TObject.__init__(self)
+    self.type = 'string'
+    self.value = ''
+  
+  def op_add(self, other):
+    if other.type == 'string':
+      self.value = self.value + other.value
+      return self
+    else:
+      raise Exception('Type mismatch!')
+  
+  @classmethod
+  def from_literal(cls, lit_string):
+    ts = TString()
+    ts.value = eval(lit_string)
+    return ts
+
+class TNumeric(TObject):
+  def __init__(self):
+    TObject.__init__(self)
+    self.type = 'numeric'
+
+class TFloat(TNumeric):
+  def __init__(self):
+    TNumeric.__init__(self)
+    self.type = 'float'
+    self.value = 0.0
+    self.methods['to_s'] = MNative('native_to_s')
+    self.methods['+'] = MNative('op_add')
+    
+  def op_add(self, other):
+    other = other[0]
+    if other.type == 'float':
+      self.value = self.value + other.value
+    elif other.type == 'integer':
+      self.value = self.value + float(other.value)
+    else:
+      raise Exception('Type mismatch!')
+    return self
+    
+  def native_to_s(self, parameters):
+    s = TString(); s.value = str(self.value)
+    return s
+
+class TFunc(TObject):
+  def __init__(self):
+    TObject.__init__(self)
     self.type = 'func'
+    self.special = False; self.generic = True
 
 class TSFunc(TFunc):
   def __init__(self):
     TFunc.__init__(self)
-    self.special = True
+    self.special = True; self.generic = False
 
 class TSPrint(TSFunc):
   def call(self, vals):
     # TODO: Implement primitives
     #print var.prim() # Prim is shorthand for primitive; gets simple version of value suited for output
-    print ''.join(map(lambda val: str(val), vals))
+    print ''.join(map(lambda val: str(val.call('to_s').value), vals))
 
 class Globals(object):
   do_print = TSPrint()
@@ -244,7 +327,11 @@ class SExpression(Statement):
         index += 1
         res = self.children[index].execute()
         if op.operator == 'plus':
-          buf += res
+          #buf += res
+          if buf.respond_to('+'):
+            buf.call('+', [res])
+          else:
+            raise Exception('Doesn\'t respond to call!')
         else:
           raise Exception('Unidentified operator: '+op.operator)
       index += 1
@@ -256,7 +343,19 @@ class SLiteral(Statement):
     Statement.__init__(self, parts, program, parent)
     self.type = 'literal'
   def execute(self):
-    return eval(self.children[0].body)
+    v = eval(self.children[0].body)
+    n = v.__class__.__name__
+    if n == 'str':
+      s = TString(); s.value = v
+      return s
+    elif n == 'int':
+      i = TInteger(); i.value = v
+      return i
+    elif n == 'float':
+      f = TFloat(); f.value = v
+      return f
+    else:
+      raise Exception("Unrecognized literal: %s" % repr(v))
 
 class SOperator(Statement):
   def scope(self, is_global = False): return self.parent.scope(is_global)
@@ -270,10 +369,7 @@ class SOperator(Statement):
   def execute(self): return None
     
     
-    
-
 #g = Generic(['test', 'test', 0, 1])
-
 
 def run(statements):
   p = Program(statements).load().run()
